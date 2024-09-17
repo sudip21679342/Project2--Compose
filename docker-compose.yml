@@ -1,0 +1,43 @@
+version: '3'
+
+services:
+  # Docker-in-Docker service
+  dind:
+    image: docker:24.0.5-dind
+    privileged: true  # Required for DinD
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+    volumes:
+      - dind-storage:/var/lib/docker  # Persist Docker data
+      - ./certs:/certs/client  # Optionally for TLS certs
+    networks:
+      - jenkins_network
+
+  # Jenkins service
+  jenkins:
+    image: jenkins/jenkins:lts
+    privileged: true  # Required for Jenkins to access the Docker socket
+    environment:
+      - DOCKER_HOST=tcp://dind:2376  # Docker socket on DinD service
+      - DOCKER_CERT_PATH=/certs/client  # Path to certs if using TLS
+      - DOCKER_TLS_VERIFY=1  # Enable TLS verification if required
+    volumes:
+      - jenkins-data:/var/jenkins_home  # Persist Jenkins data
+      - ./certs:/certs/client  # Share certs for Docker connection
+    ports:
+      - 8080:8080  # Jenkins UI port
+      - 50000:50000  # Jenkins agent port
+    depends_on:
+      - dind  # Ensure DinD is up before Jenkins
+    networks:
+      - jenkins_network
+
+# Networks to allow communication between containers
+networks:
+  jenkins_network:
+    driver: bridge
+
+# Volumes for persistence
+volumes:
+  jenkins-data:
+  dind-storage:
